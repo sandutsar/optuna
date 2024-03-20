@@ -196,9 +196,7 @@ def test_check_distribution_compatibility() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    "value", (0, 1, 4, 10, 11, 1.1, "1", "1.1", "-1.0", True, False, np.ones(1), np.array([1.1]))
-)
+@pytest.mark.parametrize("value", (0, 1, 4, 10, 11, 1.1, "1", "1.1", "-1.0", True, False))
 def test_int_internal_representation(value: Any) -> None:
     i = distributions.IntDistribution(low=1, high=10)
 
@@ -231,7 +229,7 @@ def test_int_internal_representation_error(value: Any, kwargs: Dict[str, Any]) -
 
 @pytest.mark.parametrize(
     "value",
-    (1.99, 2.0, 4.5, 7, 7.1, 1, "1", "1.1", "-1.0", True, False, np.ones(1), np.array([1.1])),
+    (1.99, 2.0, 4.5, 7, 7.1, 1, "1", "1.1", "-1.0", True, False),
 )
 def test_float_internal_representation(value: Any) -> None:
     f = distributions.FloatDistribution(low=2.0, high=7.0)
@@ -592,3 +590,20 @@ def test_convert_old_distribution_to_new_distribution_noop() -> None:
 
     ild = distributions.IntDistribution(low=1, high=10, log=True)
     assert distributions._convert_old_distribution_to_new_distribution(ild) == ild
+
+
+def test_is_distribution_log() -> None:
+    lfd = distributions.FloatDistribution(low=1, high=10, log=True)
+    assert distributions._is_distribution_log(lfd)
+
+    lid = distributions.IntDistribution(low=1, high=10, log=True)
+    assert distributions._is_distribution_log(lid)
+
+    fd = distributions.FloatDistribution(low=0, high=10, log=False)
+    assert not distributions._is_distribution_log(fd)
+
+    id = distributions.IntDistribution(low=0, high=10, log=False)
+    assert not distributions._is_distribution_log(id)
+
+    cd = distributions.CategoricalDistribution(choices=["a", "b", "c"])
+    assert not distributions._is_distribution_log(cd)

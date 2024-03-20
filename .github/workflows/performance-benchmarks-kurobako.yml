@@ -72,7 +72,7 @@ jobs:
         python -c 'import optuna'
         optuna --version
 
-        pip install --progress-bar off .[benchmark]
+        pip install --progress-bar off .[benchmark] --extra-index-url https://download.pytorch.org/whl/cpu
 
         pip install --progress-bar off kurobako
 
@@ -94,6 +94,10 @@ jobs:
     - name: Output installed packages
       run: |
         pip freeze --all
+    - name: Output dependency tree
+      run: |
+        pip install pipdeptree
+        pipdeptree
 
     - name: Cache hpobench dataset
       id: cache-hpobench-dataset

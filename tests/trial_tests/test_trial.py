@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import datetime
 import math
 from typing import Any
@@ -27,6 +29,7 @@ from optuna.testing.storages import STORAGE_MODES
 from optuna.testing.storages import StorageSupplier
 from optuna.testing.tempfile_pool import NamedTemporaryFilePool
 from optuna.trial import Trial
+from optuna.trial._trial import _LazyTrialSystemAttrs
 
 
 @pytest.mark.filterwarnings("ignore::FutureWarning")
@@ -127,11 +130,11 @@ def test_check_distribution_suggest_discrete_uniform(storage_mode: str) -> None:
         assert len([r for r in record if r.category != FutureWarning]) == 1
 
         with pytest.raises(ValueError):
-            trial.suggest_int("x", 10, 20, 2)
+            trial.suggest_int("x", 10, 20, step=2)
 
         trial = Trial(study, study._storage.create_new_trial(study._study_id))
         with pytest.raises(ValueError):
-            trial.suggest_int("x", 10, 20, 2)
+            trial.suggest_int("x", 10, 20, step=2)
 
 
 @pytest.mark.parametrize("storage_mode", STORAGE_MODES)
@@ -612,13 +615,6 @@ def test_report_warning() -> None:
         trial.report(1, 1)
 
 
-def test_study_id() -> None:
-    study = create_study()
-    trial = Trial(study, study._storage.create_new_trial(study._study_id))
-
-    assert trial._study_id == trial.study._study_id
-
-
 def test_suggest_with_multi_objectives() -> None:
     study = create_study(directions=["maximize", "maximize"])
 
@@ -678,3 +674,46 @@ def test_persisted_param() -> None:
         study = load_study(storage=storage, study_name=study_name)
 
         assert all("x" in t.params for t in study.trials)
+
+
+@pytest.mark.parametrize("storage_mode", STORAGE_MODES)
+def test_lazy_trial_system_attrs(storage_mode: str) -> None:
+    with StorageSupplier(storage_mode) as storage:
+        study = optuna.create_study(storage=storage)
+        trial = study.ask()
+        storage.set_trial_system_attr(trial._trial_id, "int", 0)
+        storage.set_trial_system_attr(trial._trial_id, "str", "A")
+
+        # _LazyTrialSystemAttrs gets attrs the first time it is needed.
+        # Then, we create the instance for each method, and test the first and second use.
+
+        system_attrs = _LazyTrialSystemAttrs(trial._trial_id, storage)
+        assert system_attrs == {"int": 0, "str": "A"}
+        assert system_attrs == {"int": 0, "str": "A"}
+
+        system_attrs = _LazyTrialSystemAttrs(trial._trial_id, storage)
+        assert len(system_attrs) == 2
+        assert len(system_attrs) == 2
+
+        system_attrs = _LazyTrialSystemAttrs(trial._trial_id, storage)
+        assert set(system_attrs.keys()) == {"int", "str"}
+        assert set(system_attrs.keys()) == {"int", "str"}
+
+        system_attrs = _LazyTrialSystemAttrs(trial._trial_id, storage)
+        assert set(system_attrs.values()) == {0, "A"}
+        assert set(system_attrs.values()) == {0, "A"}
+
+        system_attrs = _LazyTrialSystemAttrs(trial._trial_id, storage)
+        assert set(system_attrs.items()) == {("int", 0), ("str", "A")}
+        assert set(system_attrs.items()) == {("int", 0), ("str", "A")}
+
+
+@pytest.mark.parametrize("positional_args_names", [[], ["step"], ["step", "log"]])
+def test_suggest_int_positional_args(positional_args_names: list[str]) -> None:
+    # If log is specified as positional, step must also be provided as positional.
+    study = optuna.create_study()
+    trial = study.ask()
+    kwargs = dict(step=1, log=False)
+    args = [kwargs[name] for name in positional_args_names]
+    # No error should not be raised even if the coding style is old.
+    trial.suggest_int("x", -1, 1, *args)

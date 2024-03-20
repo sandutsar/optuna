@@ -20,7 +20,18 @@ jobs:
 
     strategy:
       matrix:
-        python-version: ['3.7', '3.8', '3.9', '3.10', '3.11']
+        python-version: ['3.7', '3.8', '3.9', '3.10', '3.11', '3.12']
+        test-trigger-type:
+          - ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'Scheduled' || '' }}
+        exclude:
+          - test-trigger-type: ""
+            python-version: "3.8"
+          - test-trigger-type: ""
+            python-version: "3.9"
+          - test-trigger-type: ""
+            python-version: "3.10"
+          - test-trigger-type: ""
+            python-version: "3.11"
 
     services:
       redis:
@@ -64,22 +75,36 @@ jobs:
         optuna --version
 
         pip install --progress-bar off .[test]
-        pip install --progress-bar off .[optional]
+        pip install --progress-bar off .[optional] --extra-index-url https://download.pytorch.org/whl/cpu
+        # TODO(c-bata): Remove a version constraint after releasing https://github.com/cunla/fakeredis-py/pull/303
+        pip install --progress-bar off 'fakeredis[lua]<2.21.2'
 
     - name: Output installed packages
       run: |
         pip freeze --all
-
-    - name: Scheduled tests
-      if:  ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    - name: Output dependency tree
       run: |
-        pytest tests -m "not integration"
-      env:
-        SQLALCHEMY_WARN_20: 1
+        pip install pipdeptree
+        pipdeptree
 
     - name: Tests
-      if:  ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
       run: |
-        pytest tests -m "not integration and not slow"
+        if [ "${{ github.event_name }}" = "schedule" ] || \
+           [ "${{ github.event_name }}" = "workflow_dispatch" ] ; then
+          target=""
+        else
+          target="not slow"
+        fi
+
+        if [ "${{ matrix.python-version }}" = "3.12" ] ; then
+          # TODO(not522): Remove ignores when BoTorch/Torch supports Python 3.12
+          ignore_option="--ignore tests/terminator_tests/ \
+          --ignore tests/terminator_tests/improvement_tests/ \
+          --ignore tests/visualization_tests/test_terminator_improvement.py"
+        else
+          ignore_option=""
+        fi
+
+        pytest tests -m "$target" $ignore_option
       env:
         SQLALCHEMY_WARN_20: 1

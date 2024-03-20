@@ -35,6 +35,41 @@ _import_structure = {
 }
 
 
+__all__ = [
+    "AllenNLPExecutor",
+    "AllenNLPPruningCallback",
+    "BoTorchSampler",
+    "CatalystPruningCallback",
+    "CatBoostPruningCallback",
+    "ChainerPruningExtension",
+    "ChainerMNStudy",
+    "CmaEsSampler",
+    "PyCmaSampler",
+    "DaskStorage",
+    "MLflowCallback",
+    "WeightsAndBiasesCallback",
+    "KerasPruningCallback",
+    "LightGBMPruningCallback",
+    "LightGBMTuner",
+    "LightGBMTunerCV",
+    "TorchDistributedTrial",
+    "PyTorchIgnitePruningHandler",
+    "PyTorchLightningPruningCallback",
+    "OptunaSearchCV",
+    "ShapleyImportanceEvaluator",
+    "SkorchPruningCallback",
+    "MXNetPruningCallback",
+    "SkoptSampler",
+    "TensorBoardCallback",
+    "TensorFlowPruningHook",
+    "TFKerasPruningCallback",
+    "XGBoostPruningCallback",
+    "FastAIV1PruningCallback",
+    "FastAIV2PruningCallback",
+    "FastAIPruningCallback",
+]
+
+
 if TYPE_CHECKING:
     from optuna.integration.allennlp import AllenNLPExecutor
     from optuna.integration.allennlp import AllenNLPPruningCallback
@@ -77,6 +112,7 @@ else:
         imports all submodules and their dependencies (e.g., chainer, keras, lightgbm) all at once.
         """
 
+        __all__ = __all__
         __file__ = globals()["__file__"]
         __path__ = [os.path.dirname(__file__)]
 
@@ -101,40 +137,15 @@ else:
         def _get_module(self, module_name: str) -> ModuleType:
             import importlib
 
-            return importlib.import_module("." + module_name, self.__name__)
+            try:
+                return importlib.import_module("." + module_name, self.__name__)
+            except ModuleNotFoundError:
+                raise ModuleNotFoundError(
+                    "Optuna's integration modules for third-party libraries have started "
+                    "migrating from Optuna itself to a package called `optuna-integration`. "
+                    "The module you are trying to use has already been migrated to "
+                    "`optuna-integration`. Please install the package by running "
+                    "`pip install optuna-integration`."
+                )
 
     sys.modules[__name__] = _IntegrationModule(__name__)
-
-__all__ = [
-    "AllenNLPExecutor",
-    "AllenNLPPruningCallback",
-    "BoTorchSampler",
-    "CatalystPruningCallback",
-    "CatBoostPruningCallback",
-    "ChainerPruningExtension",
-    "ChainerMNStudy",
-    "CmaEsSampler",
-    "PyCmaSampler",
-    "DaskStorage",
-    "MLflowCallback",
-    "WeightsAndBiasesCallback",
-    "KerasPruningCallback",
-    "LightGBMPruningCallback",
-    "LightGBMTuner",
-    "LightGBMTunerCV",
-    "TorchDistributedTrial",
-    "PyTorchIgnitePruningHandler",
-    "PyTorchLightningPruningCallback",
-    "OptunaSearchCV",
-    "ShapleyImportanceEvaluator",
-    "SkorchPruningCallback",
-    "MXNetPruningCallback",
-    "SkoptSampler",
-    "TensorBoardCallback",
-    "TensorFlowPruningHook",
-    "TFKerasPruningCallback",
-    "XGBoostPruningCallback",
-    "FastAIV1PruningCallback",
-    "FastAIV2PruningCallback",
-    "FastAIPruningCallback",
-]

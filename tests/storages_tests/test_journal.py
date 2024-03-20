@@ -10,7 +10,7 @@ from typing import Type
 from unittest import mock
 
 import _pytest.capture
-import fakeredis
+from fakeredis import FakeStrictRedis
 import pytest
 
 import optuna
@@ -23,19 +23,14 @@ from optuna.testing.storages import StorageSupplier
 from optuna.testing.tempfile_pool import NamedTemporaryFilePool
 
 
-LOG_STORAGE = {
+LOG_STORAGE = [
     "file_with_open_lock",
     "file_with_link_lock",
     "redis_default",
     "redis_with_use_cluster",
-}
+]
 
-LOG_STORAGE_SUPPORTING_SNAPSHOT = {
-    "redis_default",
-    "redis_with_use_cluster",
-}
-
-JOURNAL_STORAGE_SUPPORTING_SNAPSHOT = {"journal_redis"}
+JOURNAL_STORAGE_SUPPORTING_SNAPSHOT = ["journal_redis"]
 
 
 class JournalLogStorageSupplier:
@@ -59,7 +54,7 @@ class JournalLogStorageSupplier:
             journal_redis_storage = optuna.storages.JournalRedisStorage(
                 "redis://localhost", use_cluster
             )
-            journal_redis_storage._redis = fakeredis.FakeStrictRedis()
+            journal_redis_storage._redis = FakeStrictRedis()  # type: ignore[no-untyped-call]
             return journal_redis_storage
         else:
             raise RuntimeError("Unknown log storage type: {}".format(self.storage_type))

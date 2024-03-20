@@ -5,6 +5,7 @@ API Reference
     :maxdepth: 1
 
     optuna
+    artifacts
     cli
     distributions
     exceptions
@@ -16,5 +17,6 @@ API Reference
     search_space
     storages
     study
+    terminator
     trial
     visualization/index

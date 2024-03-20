@@ -1,8 +1,8 @@
+from __future__ import annotations
+
 from io import BytesIO
 from typing import Any
 from typing import Callable
-from typing import List
-from typing import Optional
 from typing import Sequence
 import warnings
 
@@ -77,10 +77,10 @@ def create_study_3d() -> Study:
 @pytest.mark.parametrize("metric_names", [None, ["v0", "v1"]])
 def test_get_pareto_front_info_unconstrained(
     include_dominated_trials: bool,
-    axis_order: Optional[List[int]],
-    targets: Optional[Callable[[FrozenTrial], Sequence[float]]],
-    target_names: Optional[List[str]],
-    metric_names: Optional[List[str]],
+    axis_order: list[int] | None,
+    targets: Callable[[FrozenTrial], Sequence[float]] | None,
+    target_names: list[str] | None,
+    metric_names: list[str] | None,
 ) -> None:
     if axis_order is not None and targets is not None:
         pytest.skip("skip using both axis_order and targets")
@@ -103,9 +103,9 @@ def test_get_pareto_front_info_unconstrained(
         n_targets=2,
         target_names=target_names or metric_names or ["Objective 0", "Objective 1"],
         best_trials_with_values=[(trials[2], [0, 2]), (trials[3], [1, 0])],
-        non_best_trials_with_values=[(trials[0], [1, 2]), (trials[1], [1, 1])]
-        if include_dominated_trials
-        else [],
+        non_best_trials_with_values=(
+            [(trials[0], [1, 2]), (trials[1], [1, 1])] if include_dominated_trials else []
+        ),
         infeasible_trials_with_values=[],
         axis_order=axis_order or [0, 1],
         include_dominated_trials=include_dominated_trials,
@@ -120,10 +120,10 @@ def test_get_pareto_front_info_unconstrained(
 @pytest.mark.parametrize("metric_names", [None, ["v0", "v1"]])
 def test_get_pareto_front_info_constrained(
     include_dominated_trials: bool,
-    axis_order: Optional[List[int]],
-    targets: Optional[Callable[[FrozenTrial], Sequence[float]]],
-    target_names: Optional[List[str]],
-    metric_names: Optional[List[str]],
+    axis_order: list[int] | None,
+    targets: Callable[[FrozenTrial], Sequence[float]] | None,
+    target_names: list[str] | None,
+    metric_names: list[str] | None,
 ) -> None:
     if axis_order is not None and targets is not None:
         pytest.skip("skip using both axis_order and targets")
@@ -166,9 +166,9 @@ def test_get_pareto_front_info_constrained(
 @pytest.mark.parametrize("target_names", [None, ["Foo", "Bar", "Baz"]])
 def test_get_pareto_front_info_3d(
     include_dominated_trials: bool,
-    axis_order: Optional[List[int]],
-    targets: Optional[Callable[[FrozenTrial], Sequence[float]]],
-    target_names: Optional[List[str]],
+    axis_order: list[int] | None,
+    targets: Callable[[FrozenTrial], Sequence[float]] | None,
+    target_names: list[str] | None,
 ) -> None:
     if axis_order is not None and targets is not None:
         pytest.skip("skip using both axis_order and targets")
@@ -190,9 +190,9 @@ def test_get_pareto_front_info_3d(
         n_targets=3,
         target_names=target_names or ["Objective 0", "Objective 1", "Objective 2"],
         best_trials_with_values=[(trials[2], [0, 2, 1]), (trials[3], [1, 0, 1])],
-        non_best_trials_with_values=[(trials[0], [1, 2, 1]), (trials[1], [1, 1, 1])]
-        if include_dominated_trials
-        else [],
+        non_best_trials_with_values=(
+            [(trials[0], [1, 2, 1]), (trials[1], [1, 1, 1])] if include_dominated_trials else []
+        ),
         infeasible_trials_with_values=[],
         axis_order=axis_order or [0, 1, 2],
         include_dominated_trials=include_dominated_trials,
@@ -212,7 +212,7 @@ def test_get_pareto_front_info_invalid_number_of_target_names() -> None:
 def test_get_pareto_front_info_unsupported_dimensions(
     n_dims: int,
     include_dominated_trials: bool,
-    constraints_func: Optional[Callable[[FrozenTrial], Sequence[float]]],
+    constraints_func: Callable[[FrozenTrial], Sequence[float]] | None,
 ) -> None:
     study = optuna.create_study(directions=["minimize"] * n_dims)
     with pytest.raises(ValueError):
@@ -228,9 +228,9 @@ def test_get_pareto_front_info_unsupported_dimensions(
 @pytest.mark.parametrize("include_dominated_trials", [False, True])
 @pytest.mark.parametrize("constraints_func", [None, lambda _: [-1.0]])
 def test_get_pareto_front_info_invalid_axis_order(
-    axis_order: List[int],
+    axis_order: list[int],
     include_dominated_trials: bool,
-    constraints_func: Optional[Callable[[FrozenTrial], Sequence[float]]],
+    constraints_func: Callable[[FrozenTrial], Sequence[float]] | None,
 ) -> None:
     study = optuna.create_study(directions=["minimize", "minimize"])
     with pytest.raises(ValueError):
@@ -246,7 +246,7 @@ def test_get_pareto_front_info_invalid_axis_order(
 @pytest.mark.parametrize("constraints_func", [None, lambda _: [-1.0]])
 def test_get_pareto_front_info_invalid_target_values(
     include_dominated_trials: bool,
-    constraints_func: Optional[Callable[[FrozenTrial], Sequence[float]]],
+    constraints_func: Callable[[FrozenTrial], Sequence[float]] | None,
 ) -> None:
     study = optuna.create_study(directions=["minimize", "minimize"])
     study.optimize(lambda _: [0, 0], n_trials=3)
@@ -264,7 +264,7 @@ def test_get_pareto_front_info_invalid_target_values(
 @pytest.mark.parametrize("constraints_func", [None, lambda _: [-1.0]])
 def test_get_pareto_front_info_using_axis_order_and_targets(
     include_dominated_trials: bool,
-    constraints_func: Optional[Callable[[FrozenTrial], Sequence[float]]],
+    constraints_func: Callable[[FrozenTrial], Sequence[float]] | None,
 ) -> None:
     study = optuna.create_study(directions=["minimize", "minimize", "minimize"])
     with pytest.raises(ValueError):

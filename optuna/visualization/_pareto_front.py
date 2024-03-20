@@ -1,17 +1,15 @@
 from __future__ import annotations
 
-import collections
+from collections.abc import Callable
+from collections.abc import Sequence
 from typing import Any
-from typing import Callable
 from typing import NamedTuple
-from typing import Sequence
 import warnings
 
 import optuna
 from optuna.exceptions import ExperimentalWarning
 from optuna.study import Study
 from optuna.study._multi_objective import _get_pareto_front_trials_by_trials
-from optuna.study.study import _SYSTEM_ATTR_METRIC_NAMES
 from optuna.trial import FrozenTrial
 from optuna.trial import TrialState
 from optuna.visualization._plotly_imports import _imports
@@ -73,10 +71,42 @@ def plot_pareto_front(
             fig = optuna.visualization.plot_pareto_front(study)
             fig.show()
 
+    Example:
+
+        The following code snippet shows how to plot a 2-dimensional Pareto front
+        of a 3-dimensional study.
+        This example is scalable, e.g., for plotting a 2- or 3-dimensional Pareto front
+        of a 4-dimensional study and so on.
+
+        .. plotly::
+
+            import optuna
+
+            def objective(trial):
+                x = trial.suggest_float("x", 0, 5)
+                y = trial.suggest_float("y", 0, 3)
+                v0 = 5 * x ** 2 + 3 * y ** 2
+                v1 = (x - 10) ** 2 + (y - 10) ** 2
+                v2 = x + y
+
+                return v0, v1, v2
+
+            study = optuna.create_study(directions=["minimize", "minimize", "minimize"])
+
+            study.optimize(objective, n_trials=100)
+
+            fig = optuna.visualization.plot_pareto_front(
+                study,
+                targets=lambda t: (t.values[0], t.values[1]),
+                target_names=["Objective 0", "Objective 1"],
+            )
+
+            fig.show()
+
     Args:
         study:
             A :class:`~optuna.study.Study` object whose trials are plotted for their objective
-            values. ``study.n_objectives`` must be either 2 or 3 when ``targets`` is :obj:`None`.
+            values. The number of objectives must be either 2 or 3 when ``targets`` is :obj:`None`.
         target_names:
             Objective name list used as the axis titles. If :obj:`None` is specified,
             "Objective {objective_index}" is used instead. If ``targets`` is specified
@@ -120,7 +150,7 @@ def plot_pareto_front(
                 See https://github.com/optuna/optuna/releases/tag/v3.0.0.
 
     Returns:
-        A :class:`plotly.graph_objs.Figure` object.
+        A :class:`plotly.graph_objects.Figure` object.
     """
 
     _imports.check()
@@ -243,14 +273,13 @@ def _get_pareto_front_info(
         if len(best_trials) == 0:
             _logger.warning("Your study does not have any completed and feasible trials.")
     else:
-        best_trials = study.best_trials
+        all_trials = study.get_trials(deepcopy=False, states=(TrialState.COMPLETE,))
+        best_trials = _get_pareto_front_trials_by_trials(all_trials, study.directions)
         if len(best_trials) == 0:
             _logger.warning("Your study does not have any completed trials.")
 
         if include_dominated_trials:
-            non_best_trials = _get_non_pareto_front_trials(
-                study.get_trials(deepcopy=False, states=(TrialState.COMPLETE,)), best_trials
-            )
+            non_best_trials = _get_non_pareto_front_trials(all_trials, best_trials)
         else:
             non_best_trials = []
         infeasible_trials = []
@@ -272,7 +301,7 @@ def _get_pareto_front_info(
     ) -> list[tuple[FrozenTrial, list[float]]]:
         target_values = [targets(trial) for trial in trials]
         for v in target_values:
-            if not isinstance(v, collections.abc.Sequence):
+            if not isinstance(v, Sequence):
                 raise ValueError(
                     "`targets` should return a sequence of target values."
                     " your `targets` returns {}".format(type(v))
@@ -312,9 +341,7 @@ def _get_pareto_front_info(
         )
 
     if target_names is None:
-        metric_names = study._storage.get_study_system_attrs(study._study_id).get(
-            _SYSTEM_ATTR_METRIC_NAMES
-        )
+        metric_names = study.metric_names
         if metric_names is None:
             target_names = [f"Objective {i}" for i in range(n_targets)]
         else:

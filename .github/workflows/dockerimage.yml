@@ -33,6 +33,8 @@ jobs:
         python_version: ['3.7', '3.8', '3.9', '3.10', '3.11']
         build_type: ['', 'dev']  # "dev" installs all the dependencies including pytest.
         exclude:
+        - python_version: '3.7'
+          build_type: 'dev'
         - python_version: '3.11'
           build_type: 'dev'
 
@@ -67,6 +69,9 @@ jobs:
     - name: Output installed packages
       run: |
         docker run "${HUB_TAG}" sh -c "pip freeze --all"
+    - name: Output dependency tree
+      run: |
+        docker run "${HUB_TAG}" sh -c "pip install pipdeptree && pipdeptree"
 
     - name: Verify the built image
       run: |

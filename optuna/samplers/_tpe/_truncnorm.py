@@ -225,10 +225,10 @@ def logpdf(
     x = (x - loc) / scale
 
     x, a, b = np.atleast_1d(x, a, b)
+
+    out = _norm_logpdf(x) - _log_gauss_mass(a, b) - np.log(scale)
+
     x, a, b = np.broadcast_arrays(x, a, b)
-
-    out = _norm_logpdf(x) - _log_gauss_mass(a, b)
-
     out[(x < a) | (b < x)] = -np.inf
     out[a == b] = math.nan
 

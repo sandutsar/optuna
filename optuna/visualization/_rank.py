@@ -1,17 +1,16 @@
+from __future__ import annotations
+
 import math
 import typing
 from typing import Any
 from typing import Callable
-from typing import List
 from typing import NamedTuple
-from typing import Optional
-from typing import Tuple
-from typing import Union
 
 import numpy as np
 
 from optuna._experimental import experimental_func
 from optuna.logging import get_logger
+from optuna.samplers._base import _CONSTRAINTS_KEY
 from optuna.study import Study
 from optuna.trial import FrozenTrial
 from optuna.trial import TrialState
@@ -19,13 +18,19 @@ from optuna.visualization._plotly_imports import _imports
 from optuna.visualization._utils import _check_plot_args
 from optuna.visualization._utils import _is_log_scale
 from optuna.visualization._utils import _is_numerical
+from optuna.visualization.matplotlib._matplotlib_imports import _imports as matplotlib_imports
 
 
-if _imports.is_successful():
+plotly_is_available = _imports.is_successful()
+if plotly_is_available:
     from optuna.visualization._plotly_imports import go
     from optuna.visualization._plotly_imports import make_subplots
     from optuna.visualization._plotly_imports import plotly
     from optuna.visualization._plotly_imports import Scatter
+if matplotlib_imports.is_successful():
+    # TODO(c-bata): Refactor to remove matplotlib and plotly dependencies in `_get_rank_info()`.
+    # See https://github.com/optuna/optuna/pull/5133#discussion_r1414761672 for the discussion.
+    from optuna.visualization.matplotlib._matplotlib_imports import plt as matplotlib_plt
 
 _logger = get_logger(__name__)
 
@@ -35,7 +40,7 @@ PADDING_RATIO = 0.05
 
 class _AxisInfo(NamedTuple):
     name: str
-    range: Tuple[float, float]
+    range: tuple[float, float]
     is_log: bool
     is_cat: bool
 
@@ -43,33 +48,33 @@ class _AxisInfo(NamedTuple):
 class _RankSubplotInfo(NamedTuple):
     xaxis: _AxisInfo
     yaxis: _AxisInfo
-    xs: List[Any]
-    ys: List[Any]
-    trials: List[FrozenTrial]
+    xs: list[Any]
+    ys: list[Any]
+    trials: list[FrozenTrial]
     zs: np.ndarray
-    color_idxs: np.ndarray
+    colors: np.ndarray
 
 
 class _RankPlotInfo(NamedTuple):
-    params: List[str]
-    sub_plot_infos: List[List[_RankSubplotInfo]]
+    params: list[str]
+    sub_plot_infos: list[list[_RankSubplotInfo]]
     target_name: str
     zs: np.ndarray
-    color_idxs: np.ndarray
+    colors: np.ndarray
     has_custom_target: bool
 
 
 @experimental_func("3.2.0")
 def plot_rank(
     study: Study,
-    params: Optional[List[str]] = None,
+    params: list[str] | None = None,
     *,
-    target: Optional[Callable[[FrozenTrial], float]] = None,
+    target: Callable[[FrozenTrial], float] | None = None,
     target_name: str = "Objective Value",
 ) -> "go.Figure":
-    """Plot parameter relations as scatter plots with colors indicating ranks of objective value.
+    """Plot parameter relations as scatter plots with colors indicating ranks of target value.
 
-    Note that, if a parameter contains missing values, a trial with missing values is not plotted.
+    Note that trials missing the specified parameters will not be plotted.
 
     Example:
 
@@ -83,10 +88,18 @@ def plot_rank(
             def objective(trial):
                 x = trial.suggest_float("x", -100, 100)
                 y = trial.suggest_categorical("y", [-1, 0, 1])
+
+                c0 = 400 - (x + y)**2
+                trial.set_user_attr("constraint", [c0])
+
                 return x ** 2 + y
 
 
-            sampler = optuna.samplers.TPESampler(seed=10)
+            def constraints(trial):
+                return trial.user_attrs["constraint"]
+
+
+            sampler = optuna.samplers.TPESampler(seed=10, constraints_func=constraints)
             study = optuna.create_study(sampler=sampler)
             study.optimize(objective, n_trials=30)
 
@@ -108,7 +121,7 @@ def plot_rank(
             Target's name to display on the color bar.
 
     Returns:
-        A :class:`plotly.graph_objs.Figure` object.
+        A :class:`plotly.graph_objects.Figure` object.
 
     .. note::
         This function requires plotly >= 5.0.0.
@@ -130,8 +143,8 @@ def _get_order_with_same_order_averaging(data: np.ndarray) -> np.ndarray:
 
 def _get_rank_info(
     study: Study,
-    params: Optional[List[str]],
-    target: Optional[Callable[[FrozenTrial], float]],
+    params: list[str] | None,
+    target: Callable[[FrozenTrial], float] | None,
     target_name: str,
 ) -> _RankPlotInfo:
     _check_plot_args(study, target, target_name)
@@ -162,16 +175,18 @@ def _get_rank_info(
     target_values = np.array([target(trial) for trial in trials])
     raw_ranks = _get_order_with_same_order_averaging(target_values)
     color_idxs = raw_ranks / (len(trials) - 1) if len(trials) >= 2 else np.array([0.5])
-    sub_plot_infos: List[List[_RankSubplotInfo]]
+    colors = _convert_color_idxs_to_scaled_rgb_colors(color_idxs)
+
+    sub_plot_infos: list[list[_RankSubplotInfo]]
     if len(params) == 2:
         x_param = params[0]
         y_param = params[1]
-        sub_plot_info = _get_rank_subplot_info(trials, target_values, color_idxs, x_param, y_param)
+        sub_plot_info = _get_rank_subplot_info(trials, target_values, colors, x_param, y_param)
         sub_plot_infos = [[sub_plot_info]]
     else:
         sub_plot_infos = [
             [
-                _get_rank_subplot_info(trials, target_values, color_idxs, x_param, y_param)
+                _get_rank_subplot_info(trials, target_values, colors, x_param, y_param)
                 for x_param in params
             ]
             for y_param in params
@@ -182,33 +197,39 @@ def _get_rank_info(
         sub_plot_infos=sub_plot_infos,
         target_name=target_name,
         zs=target_values,
-        color_idxs=color_idxs,
+        colors=colors,
         has_custom_target=has_custom_target,
     )
 
 
 def _get_rank_subplot_info(
-    trials: List[FrozenTrial],
+    trials: list[FrozenTrial],
     target_values: np.ndarray,
-    color_idxs: np.ndarray,
+    colors: np.ndarray,
     x_param: str,
     y_param: str,
 ) -> _RankSubplotInfo:
     xaxis = _get_axis_info(trials, x_param)
     yaxis = _get_axis_info(trials, y_param)
 
-    filtered_ids = np.array(
-        [
-            i
-            for i in range(len(trials))
-            if x_param in trials[i].params and y_param in trials[i].params
-        ]
-    )
+    infeasible_trial_ids = []
+    for i in range(len(trials)):
+        constraints = trials[i].system_attrs.get(_CONSTRAINTS_KEY)
+        if constraints is not None and any([x > 0.0 for x in constraints]):
+            infeasible_trial_ids.append(i)
+
+    colors[infeasible_trial_ids] = (204, 204, 204)  # equal to "#CCCCCC"
+
+    filtered_ids = [
+        i
+        for i in range(len(trials))
+        if x_param in trials[i].params and y_param in trials[i].params
+    ]
     filtered_trials = [trials[i] for i in filtered_ids]
     xs = [trial.params[x_param] for trial in filtered_trials]
     ys = [trial.params[y_param] for trial in filtered_trials]
     zs = target_values[filtered_ids]
-    color_idxs = color_idxs[filtered_ids]
+    colors = colors[filtered_ids]
     return _RankSubplotInfo(
         xaxis=xaxis,
         yaxis=yaxis,
@@ -216,12 +237,12 @@ def _get_rank_subplot_info(
         ys=ys,
         trials=filtered_trials,
         zs=np.array(zs),
-        color_idxs=np.array(color_idxs),
+        colors=colors,
     )
 
 
-def _get_axis_info(trials: List[FrozenTrial], param_name: str) -> _AxisInfo:
-    values: List[Union[str, float, None]]
+def _get_axis_info(trials: list[FrozenTrial], param_name: str) -> _AxisInfo:
+    values: list[str | float | None]
     is_numerical = _is_numerical(trials, param_name)
     if is_numerical:
         values = [t.params.get(param_name) for t in trials]
@@ -273,10 +294,6 @@ def _get_axis_info(trials: List[FrozenTrial], param_name: str) -> _AxisInfo:
 def _get_rank_subplot(
     info: _RankSubplotInfo, target_name: str, print_raw_objectives: bool
 ) -> "Scatter":
-    colormap = "RdYlBu_r"
-    # sample_colorscale requires plotly >= 5.0.0.
-    colors = plotly.colors.sample_colorscale(colormap, info.color_idxs)
-
     def get_hover_text(trial: FrozenTrial, target_value: float) -> str:
         lines = [f"Trial #{trial.number}"]
         lines += [f"{k}: {v}" for k, v in trial.params.items()]
@@ -288,7 +305,10 @@ def _get_rank_subplot(
     scatter = go.Scatter(
         x=info.xs,
         y=info.ys,
-        marker={"color": colors},
+        marker={
+            "color": list(map(plotly.colors.label_rgb, info.colors)),
+            "line": {"width": 0.5, "color": "Grey"},
+        },
         mode="markers",
         showlegend=False,
         hovertemplate="%{hovertext}<extra></extra>",
@@ -298,6 +318,20 @@ def _get_rank_subplot(
         ],
     )
     return scatter
+
+
+class _TickInfo(NamedTuple):
+    coloridxs: list[float]
+    text: list[str]
+
+
+def _get_tick_info(target_values: np.ndarray) -> _TickInfo:
+    sorted_target_values = np.sort(target_values)
+    coloridxs = [0, 0.25, 0.5, 0.75, 1]
+    values = np.quantile(sorted_target_values, coloridxs)
+    rank_text = ["min.", "25%", "50%", "75%", "max."]
+    text = [f"{rank_text[i]} ({values[i]:3g})" for i in range(len(values))]
+    return _TickInfo(coloridxs=coloridxs, text=text)
 
 
 def _get_rank_plot(
@@ -370,11 +404,8 @@ def _get_rank_plot(
                     figure.update_yaxes(title_text=y_param, row=y_i + 1, col=x_i + 1)
                 if y_i == len(params) - 1:
                     figure.update_xaxes(title_text=x_param, row=y_i + 1, col=x_i + 1)
-    sorted_zs = np.sort(info.zs)
-    tick_coloridxs = [0, 0.25, 0.5, 0.75, 1]
-    tick_values = np.quantile(sorted_zs, tick_coloridxs)
-    rank_text = ["min.", "25%", "50%", "75%", "max."]
-    ticktext = [f"{rank_text[i]} ({tick_values[i]:3g})" for i in range(len(tick_values))]
+
+    tick_info = _get_tick_info(info.zs)
 
     colormap = "RdYlBu_r"
     colorbar_trace = go.Scatter(
@@ -382,15 +413,28 @@ def _get_rank_plot(
         y=[None],
         mode="markers",
         marker=dict(
-            line={"width": 0.5, "color": "Grey"},
             colorscale=colormap,
             showscale=True,
             cmin=0,
             cmax=1,
-            colorbar=dict(thickness=10, tickvals=tick_coloridxs, ticktext=ticktext),
+            colorbar=dict(thickness=10, tickvals=tick_info.coloridxs, ticktext=tick_info.text),
         ),
         hoverinfo="none",
         showlegend=False,
     )
     figure.add_trace(colorbar_trace)
     return figure
+
+
+def _convert_color_idxs_to_scaled_rgb_colors(color_idxs: np.ndarray) -> np.ndarray:
+    colormap = "RdYlBu_r"
+    if plotly_is_available:
+        # sample_colorscale requires plotly >= 5.0.0.
+        labeled_colors = plotly.colors.sample_colorscale(colormap, color_idxs)
+        scaled_rgb_colors = np.array([plotly.colors.unlabel_rgb(cl) for cl in labeled_colors])
+        return scaled_rgb_colors
+    else:
+        cmap = matplotlib_plt.get_cmap(colormap)
+        colors = cmap(color_idxs)[:, :3]  # Drop alpha values.
+        rgb_colors = np.asarray(colors * 255, dtype=int)
+        return rgb_colors

@@ -1,8 +1,8 @@
 """
 .. _configurations:
 
-2. Pythonic Search Space
-========================
+Pythonic Search Space
+=====================
 
 For hyperparameter sampling, Optuna provides the following features:
 
@@ -13,7 +13,6 @@ For hyperparameter sampling, Optuna provides the following features:
 With optional arguments of ``step`` and ``log``, we can discretize or take the logarithm of
 integer and floating point parameters.
 """
-
 
 import optuna
 

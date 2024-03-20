@@ -16,8 +16,6 @@ from optuna.trial import TrialState
 class PartialFixedSampler(BaseSampler):
     """Sampler with partially fixed parameters.
 
-        .. versionadded:: 2.4.0
-
     Example:
 
         After several steps of optimization, you can fix the value of ``y`` and re-optimize it.
@@ -107,6 +105,9 @@ class PartialFixedSampler(BaseSampler):
                     f"for distribution {param_distribution}."
                 )
             return param_value
+
+    def before_trial(self, study: Study, trial: FrozenTrial) -> None:
+        self._base_sampler.before_trial(study, trial)
 
     def after_trial(
         self,

@@ -1,4 +1,3 @@
-from collections import OrderedDict
 from typing import Callable
 from typing import Dict
 from typing import List
@@ -106,7 +105,7 @@ class FanovaImportanceEvaluator(BaseImportanceEvaluator):
         }
 
         if len(non_single_distributions) == 0:
-            return OrderedDict()
+            return {}
 
         trials: List[FrozenTrial] = _get_filtered_trials(study, params=params, target=target)
 
@@ -127,6 +126,7 @@ class FanovaImportanceEvaluator(BaseImportanceEvaluator):
         param_importances = numpy.array(
             [evaluator.get_importance(i)[0] for i in range(len(non_single_distributions))]
         )
+        # We normalize here to keep the backward compatibility.
         param_importances /= numpy.sum(param_importances)
 
         return _sort_dict_by_importance(
